@@ -1,0 +1,19 @@
+from fastapi import FastAPI
+from routers.users import router as user_router, root_router
+from routers.predict import router as predict_router
+import uvicorn
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {'message': 'Hello World'}
+
+app.include_router(user_router, prefix='/users')
+app.include_router(root_router)
+app.include_router(predict_router)
+
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8003)
