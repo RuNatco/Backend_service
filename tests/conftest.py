@@ -14,7 +14,8 @@ from main import app
 
 @pytest.fixture
 def app_client() -> Generator[TestClient, None, None]:
-    return TestClient(app)
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture(scope='function')
@@ -33,10 +34,7 @@ def some_user(
     assert create_response.status_code == HTTPStatus.CREATED
     yield created_user
 
-    deleted_response = app_client.delete(
-        f'/users/{created_user["id"]}',
-        cookies={
-            'x-user-id': str(created_user['id'])
-        },
-    )
+    app_client.cookies.set('x-user-id', str(created_user['id']))
+    deleted_response = app_client.delete(f'/users/{created_user["id"]}')
+    app_client.cookies.clear()
     assert deleted_response.status_code == HTTPStatus.OK or deleted_response.status_code == HTTPStatus.NOT_FOUND

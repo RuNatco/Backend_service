@@ -21,50 +21,53 @@ def test_predict_verified(
     app_client: TestClient,
     base_payload: Mapping[str, object],
 ) -> None:
-    payload = {**base_payload, 'is_verified_seller': True, 'images_qty': 0}
+    payload = {**base_payload, 'is_verified_seller': False, 'images_qty': 0}
 
     response = app_client.post('/predict', json=payload)
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json() is True
+    data = response.json()
+    assert data['is_violation'] is True
+    assert 0.0 <= data['probability'] <= 1.0
 
 
 def test_predict_unverified(
     app_client: TestClient,
     base_payload: Mapping[str, object],
 ) -> None:
-    payload = {**base_payload, 'is_verified_seller': False, 'images_qty': 0}
+    payload = {**base_payload, 'is_verified_seller': True, 'images_qty': 10}
 
     response = app_client.post('/predict', json=payload)
 
     assert response.status_code == HTTPStatus.OK
-    assert response.json() is False
+    data = response.json()
+    assert data['is_violation'] is False
+    assert 0.0 <= data['probability'] <= 1.0
 
 
 def test_validation_error(
     app_client: TestClient,
     base_payload: Mapping[str, object],
 ) -> None:
-    payload = dict(base_payload)
-    payload.pop('name')
+    payload = {**base_payload, 'seller_id': 'wrong-type'}
 
     response = app_client.post('/predict', json=payload)
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_business_logic(
+def test_model_unavailable(
     app_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
     base_payload: Mapping[str, object],
 ) -> None:
-    def explode(*_: object, **__: object) -> bool:
-        raise RuntimeError('unexpected failure')
+    app = app_client.app
+    original_model = getattr(app.state, "model", None)
+    app.state.model = None
+    try:
+        response = app_client.post('/predict', json=base_payload)
+    finally:
+        app.state.model = original_model
 
-    monkeypatch.setattr('routers.predict.apply_prediction_rules', explode)
-
-    response = app_client.post('/predict', json=base_payload)
-
-    assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-    assert response.json()['detail'] == 'Prediction failed'
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert response.json()['detail'] == 'Model is not loaded'
 

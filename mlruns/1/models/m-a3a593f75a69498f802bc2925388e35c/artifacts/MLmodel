@@ -1,0 +1,22 @@
+artifact_path: /Users/nata/HSE/Backend/HW/mlruns/1/models/m-a3a593f75a69498f802bc2925388e35c/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.4
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.4.2
+mlflow_version: 3.8.1
+model_id: m-a3a593f75a69498f802bc2925388e35c
+model_size_bytes: 741
+model_uuid: m-a3a593f75a69498f802bc2925388e35c
+prompts: null
+run_id: 8afd75a0b9374dcba8a71916088b685c
+utc_time_created: '2026-01-28 20:30:23.537604'

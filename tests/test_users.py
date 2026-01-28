@@ -31,12 +31,9 @@ def test_deactivate_user(
     app_client: TestClient,
     some_user: Mapping[str, Any]
 ):
-    update_response = app_client.patch(
-        f'/users/deactivate/{some_user["id"]}',
-        cookies={
-            'x-user-id': str(some_user['id'])
-        },
-    )
+    app_client.cookies.set('x-user-id', str(some_user['id']))
+    update_response = app_client.patch(f'/users/deactivate/{some_user["id"]}')
+    app_client.cookies.clear()
     assert update_response.status_code == HTTPStatus.OK, update_response.json()
 
     updated_user = update_response.json()
@@ -50,12 +47,9 @@ def test_delete_user(
     app_client: TestClient,
     some_user: Mapping[str, Any]
 ):
-    delete_response = app_client.delete(
-        f'/users/{some_user["id"]}',
-        cookies={
-            'x-user-id': str(some_user['id'])
-        }
-    )
+    app_client.cookies.set('x-user-id', str(some_user['id']))
+    delete_response = app_client.delete(f'/users/{some_user["id"]}')
+    app_client.cookies.clear()
     assert delete_response.status_code == HTTPStatus.OK, delete_response.json()
 
     deleted_user = delete_response.json()
@@ -77,12 +71,9 @@ def test_get_many_users(
     users = get_users_response.json()
     assert len(users) == 1
 
-    delete_response = app_client.delete(
-        f'/users/{some_user["id"]}',
-        cookies={
-            'x-user-id': str(some_user['id'])
-        },
-    )
+    app_client.cookies.set('x-user-id', str(some_user['id']))
+    delete_response = app_client.delete(f'/users/{some_user["id"]}')
+    app_client.cookies.clear()
     assert delete_response.status_code == HTTPStatus.OK, delete_response.json()
 
     get_users_response = app_client.get(f'/users')
@@ -115,9 +106,9 @@ def test_get_current_user(
     app_client: TestClient,
     some_user: Mapping[str, Any]
 ):
-    get_response = app_client.get(f'/users/current/', cookies={
-        'x-user-id': some_user['id'],
-    })
+    app_client.cookies.set('x-user-id', str(some_user['id']))
+    get_response = app_client.get('/users/current/')
+    app_client.cookies.clear()
     assert get_response.status_code == HTTPStatus.OK
 
     get_user = get_response.json()
