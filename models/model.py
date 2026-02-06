@@ -31,6 +31,24 @@ def save_model(model: LogisticRegression, path: Path | str = "model.pkl") -> Non
         path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)
 
+def train_and_save_model(
+    path: Path | str = "model.pkl",
+    use_mlflow: bool = False,
+    mlflow_tracking_uri: str = "sqlite:///mlflow.db",
+    mlflow_experiment: str = "moderation-model",
+    mlflow_model_name: str = "moderation-model",
+) -> LogisticRegression:
+    model = train_model()
+    save_model(model, path)
+    if use_mlflow:
+        register_model_in_mlflow(
+            model,
+            tracking_uri=mlflow_tracking_uri,
+            experiment=mlflow_experiment,
+            registered_model_name=mlflow_model_name,
+        )
+    return model
+
 def load_model(path: Path | str = "model.pkl") -> LogisticRegression:
     path = Path(path)
     return joblib.load(path)
@@ -61,38 +79,3 @@ def register_model_in_mlflow(
             registered_model_name=registered_model_name,
         )
 
-
-def load_or_train_model(
-    model_path: Path | str,
-    use_mlflow: bool = False,
-    mlflow_model_name: str = "moderation-model",
-    mlflow_stage: str = "Production",
-    mlflow_tracking_uri: str = "sqlite:///mlflow.db",
-    mlflow_experiment: str = "moderation-model",
-) -> Any:
-    model_path = Path(model_path)
-    if use_mlflow:
-        if mlflow is None:
-            if model_path.exists():
-                return load_model(model_path)
-            model = train_model()
-            save_model(model, model_path)
-            return model
-        try:
-            return load_model_from_mlflow(mlflow_model_name, mlflow_stage)
-        except Exception:
-            model = train_model()
-            register_model_in_mlflow(
-                model,
-                tracking_uri=mlflow_tracking_uri,
-                experiment=mlflow_experiment,
-                registered_model_name=mlflow_model_name,
-            )
-            return model
-
-    if model_path.exists():
-        return load_model(model_path)
-
-    model = train_model()
-    save_model(model, model_path)
-    return model

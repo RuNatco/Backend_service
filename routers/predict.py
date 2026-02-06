@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-import logging
-import numpy as np
+
+from services.predict import predict_violation
+from repositories.adds import AddRepository
+from repositories.users import UserRepository
+from errors import AddNotFoundError, UserNotFoundError
 
 
 class PredictRequest(BaseModel):
@@ -14,9 +17,9 @@ class PredictRequest(BaseModel):
     images_qty: int = Field(..., ge=0, description='Number of attached images')
 
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix='/predict')
+add_repo = AddRepository()
+user_repo = UserRepository()
 
 
 class PredictResponse(BaseModel):
@@ -31,30 +34,46 @@ async def predict(request: PredictRequest, http_request: Request) -> PredictResp
         if model is None:
             raise HTTPException(status_code=503, detail="Model is not loaded")
 
-        features = np.array([[
-            1.0 if request.is_verified_seller else 0.0,
-            request.images_qty / 10.0,
-            len(request.description) / 1000.0,
-            request.category / 100.0,
-        ]], dtype=float)
-
-        logger.info(
-            "predict_request seller_id=%s item_id=%s features=%s",
-            request.seller_id,
-            request.item_id,
-            features.tolist()[0],
-        )
-
-        probability = float(model.predict_proba(features)[0][1])
-        is_violation = bool(model.predict(features)[0])
-
-        logger.info(
-            "predict_response is_violation=%s probability=%.6f",
-            is_violation,
-            probability,
+        is_violation, probability = predict_violation(
+            model=model,
+            seller_id=request.seller_id,
+            item_id=request.item_id,
+            is_verified_seller=request.is_verified_seller,
+            images_qty=request.images_qty,
+            description=request.description,
+            category=request.category,
         )
 
         return PredictResponse(is_violation=is_violation, probability=probability)
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail='Prediction failed') from exc
+
+
+@router.get('/simple_predict', response_model=PredictResponse, summary='Predict by item_id only')
+async def simple_predict(item_id: int, http_request: Request) -> PredictResponse:
+    try:
+        model = getattr(http_request.app.state, "model", None)
+        if model is None:
+            raise HTTPException(status_code=503, detail="Model is not loaded")
+
+        add = await add_repo.get(item_id)
+        user = await user_repo.get(add.seller_id)
+
+        is_violation, probability = predict_violation(
+            model=model,
+            seller_id=user.id,
+            item_id=add.id,
+            is_verified_seller=user.is_verified_seller,
+            images_qty=add.images_qty,
+            description=add.description,
+            category=add.category,
+        )
+
+        return PredictResponse(is_violation=is_violation, probability=probability)
+    except (AddNotFoundError, UserNotFoundError):
+        raise HTTPException(status_code=404, detail="Add or seller not found")
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise

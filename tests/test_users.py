@@ -94,7 +94,7 @@ def test_login_user(
         password=PASSWORD,
     ))
     assert login_response.status_code == HTTPStatus.OK
-    assert login_response.cookies.get('x-user-id') == some_user['id']
+    assert login_response.cookies.get('x-user-id') == str(some_user['id'])
 
     logged_user = login_response.json()
     assert logged_user['id'] == some_user['id']

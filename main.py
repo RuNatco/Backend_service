@@ -6,18 +6,35 @@ import uvicorn
 import logging
 import os
 from pathlib import Path
-from models.model import load_or_train_model
+from models.model import load_model, load_model_from_mlflow, train_and_save_model
+from db.connection import DB_PATH
+from db.migrate import apply_migrations
 
 logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     model_path = Path(__file__).resolve().parent / "model.pkl"
+    migrations_dir = Path(__file__).resolve().parent / "db" / "migrations"
     use_mlflow = os.getenv("USE_MLFLOW", "false").lower() == "true"
-    app.state.model = load_or_train_model(
-        model_path,
-        use_mlflow=use_mlflow,
-    )
+    try:
+        apply_migrations(DB_PATH, migrations_dir)
+        if use_mlflow:
+            try:
+                app.state.model = load_model_from_mlflow("moderation-model", "Production")
+                logging.info("Model loaded from MLflow registry")
+            except Exception:
+                app.state.model = train_and_save_model(model_path, use_mlflow=True)
+                logging.info("Model trained and registered in MLflow")
+        elif model_path.exists():
+            app.state.model = load_model(model_path)
+            logging.info("Model loaded from local file: %s", model_path)
+        else:
+            app.state.model = train_and_save_model(model_path)
+            logging.info("Model trained and saved to local file: %s", model_path)
+    except Exception as exc:
+        logging.exception("Failed to load model: %s", exc)
+        app.state.model = None
     yield
 
 app = FastAPI(

@@ -5,3 +5,9 @@
 /services/__pycache__
 /tests/__pycache__
 /.venv/
+/.pytest_cache
+/.idea/
+/mlruns/
+/mlflow.db
+/db/app.db
+/model.pkl

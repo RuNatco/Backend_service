@@ -1,6 +1,7 @@
 from typing import Any, Mapping, Generator
 import os
 import sys
+from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from http import HTTPStatus
@@ -10,10 +11,31 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from main import app
+from models.model import train_and_save_model
+from db.connection import DB_PATH
+from db.migrate import apply_migrations
+
+MODEL_PATH = Path(ROOT_DIR) / "model.pkl"
+MIGRATIONS_DIR = Path(ROOT_DIR) / "db" / "migrations"
+
+
+@pytest.fixture(scope="session")
+def model_file() -> Path:
+    if not MODEL_PATH.exists():
+        train_and_save_model(MODEL_PATH)
+    return MODEL_PATH
+
+
+@pytest.fixture(scope="function")
+def migrated_db() -> Path:
+    if DB_PATH.exists():
+        DB_PATH.unlink()
+    apply_migrations(DB_PATH, MIGRATIONS_DIR)
+    return DB_PATH
 
 
 @pytest.fixture
-def app_client() -> Generator[TestClient, None, None]:
+def app_client(model_file: Path, migrated_db: Path) -> Generator[TestClient, None, None]:
     with TestClient(app) as client:
         yield client
 

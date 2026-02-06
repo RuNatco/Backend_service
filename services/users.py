@@ -3,6 +3,7 @@ from models.users import UserModel
 from typing import Mapping
 from typing import Sequence
 from typing import Any
+from typing import Union
 from repositories.users import UserRepository
 
 
@@ -23,16 +24,16 @@ class UserService:
         return user
     
 
-    async def get(self, user_id: str) -> UserModel:
-        return await self.user_repo.get(user_id)
+    async def get(self, user_id: Union[str, int]) -> UserModel:
+        return await self.user_repo.get(int(user_id))
 
 
-    async def delete(self, user_id: str) -> UserModel:
-        return await self.user_repo.delete(user_id)
+    async def delete(self, user_id: Union[str, int]) -> UserModel:
+        return await self.user_repo.delete(int(user_id))
 
 
-    async def deactivate(self, user_id: str) -> UserModel:
-        return await self.user_repo.update(user_id, is_active=False)
+    async def deactivate(self, user_id: Union[str, int]) -> UserModel:
+        return await self.user_repo.update(int(user_id), is_active=False)
     
 
     async def get_many(self) -> Sequence[UserModel]:
