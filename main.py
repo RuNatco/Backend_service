@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 from models.model import load_model, load_model_from_mlflow, train_and_save_model
-from db.connection import DB_PATH
+from db.connection import DB_DSN
 from db.migrate import apply_migrations
 
 logging.basicConfig(level=logging.INFO)
@@ -15,10 +15,10 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     model_path = Path(__file__).resolve().parent / "model.pkl"
-    migrations_dir = Path(__file__).resolve().parent / "db" / "migrations"
+    migrations_dir = Path(__file__).resolve().parent / "db"
     use_mlflow = os.getenv("USE_MLFLOW", "false").lower() == "true"
     try:
-        apply_migrations(DB_PATH, migrations_dir)
+        apply_migrations(migrations_dir, DB_DSN)
         if use_mlflow:
             try:
                 app.state.model = load_model_from_mlflow("moderation-model", "Production")

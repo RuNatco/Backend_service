@@ -12,11 +12,11 @@ if ROOT_DIR not in sys.path:
 
 from main import app
 from models.model import train_and_save_model
-from db.connection import DB_PATH
+from db.connection import DB_DSN, get_connection
 from db.migrate import apply_migrations
 
 MODEL_PATH = Path(ROOT_DIR) / "model.pkl"
-MIGRATIONS_DIR = Path(ROOT_DIR) / "db" / "migrations"
+MIGRATIONS_DIR = Path(ROOT_DIR) / "db"
 
 
 @pytest.fixture(scope="session")
@@ -26,16 +26,22 @@ def model_file() -> Path:
     return MODEL_PATH
 
 
+@pytest.fixture(scope="session")
+def migrated_db() -> None:
+    apply_migrations(MIGRATIONS_DIR, DB_DSN)
+
+
 @pytest.fixture(scope="function")
-def migrated_db() -> Path:
-    if DB_PATH.exists():
-        DB_PATH.unlink()
-    apply_migrations(DB_PATH, MIGRATIONS_DIR)
-    return DB_PATH
+def clean_db(migrated_db: None) -> None:
+    with get_connection(DB_DSN) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("TRUNCATE TABLE adds RESTART IDENTITY CASCADE")
+            cursor.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+        conn.commit()
 
 
 @pytest.fixture
-def app_client(model_file: Path, migrated_db: Path) -> Generator[TestClient, None, None]:
+def app_client(model_file: Path, clean_db: None) -> Generator[TestClient, None, None]:
     with TestClient(app) as client:
         yield client
 

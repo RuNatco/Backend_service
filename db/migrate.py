@@ -1,15 +1,14 @@
 from __future__ import annotations
+
 from pathlib import Path
-from db.connection import get_connection
+import subprocess
 
 
-def apply_migrations(db_path: Path, migrations_dir: Path) -> None:
-    migrations = sorted(migrations_dir.glob("V*.sql"))
-    if not migrations:
-        return
-
-    with get_connection(db_path) as conn:
-        for migration in migrations:
-            sql = migration.read_text()
-            if sql.strip():
-                conn.executescript(sql)
+def apply_migrations(base_dir: Path, dsn: str | None = None) -> None:
+    command = ["pgmigrate", "-t", "latest", "migrate", "-d", str(base_dir)]
+    if dsn:
+        command.extend(["-c", dsn])
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr = result.stderr.strip() or "pgmigrate failed without stderr"
+        raise RuntimeError(stderr)

@@ -8,3 +8,6 @@ scikit-learn
 numpy
 mlflow
 joblib
+psycopg2-binary
+asyncpg
+yandex-pgmigrate
