@@ -9,6 +9,7 @@ from http import HTTPStatus
 ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+os.environ["DISABLE_KAFKA"] = "true"
 
 from main import app
 from models.model import train_and_save_model
@@ -35,6 +36,7 @@ def migrated_db() -> None:
 def clean_db(migrated_db: None) -> None:
     with get_connection(DB_DSN) as conn:
         with conn.cursor() as cursor:
+            cursor.execute("TRUNCATE TABLE moderation_result RESTART IDENTITY CASCADE")
             cursor.execute("TRUNCATE TABLE adds RESTART IDENTITY CASCADE")
             cursor.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
         conn.commit()

@@ -11,3 +11,4 @@ joblib
 psycopg2-binary
 asyncpg
 yandex-pgmigrate
+aiokafka
