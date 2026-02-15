@@ -7,7 +7,6 @@ from http import HTTPStatus
 PASSWORD = 'qwerty'
 
 
-
 @pytest.mark.parametrize('name', ['Иванов И.И.'])
 @pytest.mark.parametrize('password', [PASSWORD])
 def test_create_user(

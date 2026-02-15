@@ -1,6 +1,6 @@
 import asyncio
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Callable
 
 from fastapi.testclient import TestClient
 import pytest
@@ -41,33 +41,11 @@ class _KafkaStub:
         )
 
 
-def _create_user_and_add() -> tuple[int, int]:
-    user_repo = UserRepository()
-    add_repo = AddRepository()
-    user = asyncio.run(
-        user_repo.create(
-            name="Async User",
-            password="pass",
-            email="async@example.com",
-            is_verified_seller=False,
-        )
-    )
-    add = asyncio.run(
-        add_repo.create(
-            seller_id=user.id,
-            name="Async Add",
-            description="Need moderation",
-            category=10,
-            images_qty=0,
-        )
-    )
-    return user.id, add.id
-
-
 def test_async_predict_creates_task(
     app_client: TestClient,
+    create_user_and_add: Callable[[bool, int], tuple[int, int]],
 ) -> None:
-    _, add_id = _create_user_and_add()
+    _, add_id = create_user_and_add(False, 0)
     kafka_stub = _KafkaStub()
     app_client.app.state.kafka_client = kafka_stub
 
@@ -80,10 +58,36 @@ def test_async_predict_creates_task(
     assert kafka_stub.sent_messages
 
 
-def test_moderation_result_endpoint(
+def test_async_predict_returns_404_for_missing_add(
     app_client: TestClient,
 ) -> None:
-    _, add_id = _create_user_and_add()
+    kafka_stub = _KafkaStub()
+    app_client.app.state.kafka_client = kafka_stub
+
+    response = app_client.post("/async_predict", json={"item_id": 999999})
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()["detail"] == "Add not found"
+
+
+def test_async_predict_returns_503_without_kafka(
+    app_client: TestClient,
+    create_user_and_add: Callable[[bool, int], tuple[int, int]],
+) -> None:
+    _, add_id = create_user_and_add(False, 0)
+    app_client.app.state.kafka_client = None
+
+    response = app_client.post("/async_predict", json={"item_id": add_id})
+
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert response.json()["detail"] == "Kafka is unavailable"
+
+
+def test_moderation_result_endpoint(
+    app_client: TestClient,
+    create_user_and_add: Callable[[bool, int], tuple[int, int]],
+) -> None:
+    _, add_id = create_user_and_add(False, 0)
     repo = ModerationResultRepository()
     task = asyncio.run(repo.create_pending(add_id))
 
@@ -97,10 +101,20 @@ def test_moderation_result_endpoint(
     assert data["probability"] is None
 
 
+def test_moderation_result_endpoint_returns_404_for_missing_task(
+    app_client: TestClient,
+) -> None:
+    response = app_client.get("/moderation_result/999999")
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()["detail"] == "Task not found"
+
+
 def test_worker_processes_message(
     clean_db: None,
+    create_user_and_add: Callable[[bool, int], tuple[int, int]],
 ) -> None:
-    _, add_id = _create_user_and_add()
+    _, add_id = create_user_and_add(False, 0)
     repo = ModerationResultRepository()
     task = asyncio.run(repo.create_pending(add_id))
     kafka_stub = _KafkaStub()
@@ -129,9 +143,12 @@ def test_worker_processes_message(
     assert updated.probability == 0.7
 
 
-def test_worker_sends_to_dlq_on_error(clean_db: None) -> None:
+def test_worker_sends_to_dlq_on_error(
+    clean_db: None,
+    create_user_and_add: Callable[[bool, int], tuple[int, int]],
+) -> None:
     repo = ModerationResultRepository()
-    _, add_id = _create_user_and_add()
+    _, add_id = create_user_and_add(False, 0)
     task = asyncio.run(repo.create_pending(add_id))
     kafka_stub = _KafkaStub()
 
@@ -158,8 +175,11 @@ def test_worker_sends_to_dlq_on_error(clean_db: None) -> None:
     assert kafka_stub.sent_dlq
 
 
-def test_worker_retries_temporary_error(clean_db: None) -> None:
-    _, add_id = _create_user_and_add()
+def test_worker_retries_temporary_error(
+    clean_db: None,
+    create_user_and_add: Callable[[bool, int], tuple[int, int]],
+) -> None:
+    _, add_id = create_user_and_add(False, 0)
     repo = ModerationResultRepository()
     task = asyncio.run(repo.create_pending(add_id))
     kafka_stub = _KafkaStub()

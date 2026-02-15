@@ -24,6 +24,11 @@ async def lifespan(app: FastAPI):
     app.state.kafka_client = kafka_client
     try:
         apply_migrations(migrations_dir, DB_DSN)
+    except Exception as exc:
+        logging.exception("Failed to apply migrations: %s", exc)
+        raise
+
+    try:
         if kafka_client is not None:
             try:
                 await kafka_client.start()

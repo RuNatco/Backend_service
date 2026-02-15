@@ -1,14 +1,17 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from errors import AddNotFoundError, ModerationTaskNotFoundError
-from repositories.adds import AddRepository
-from repositories.moderation_results import ModerationResultRepository
+from errors import (
+    AddNotFoundError,
+    KafkaUnavailableError,
+    ModerationEnqueueError,
+    ModerationTaskNotFoundError,
+)
+from services.moderation import ModerationService
 
 
 router = APIRouter()
-add_repo = AddRepository()
-moderation_repo = ModerationResultRepository()
+moderation_service = ModerationService()
 
 
 class AsyncPredictRequest(BaseModel):
@@ -31,29 +34,24 @@ class ModerationResultResponse(BaseModel):
 
 @router.post("/async_predict", response_model=AsyncPredictResponse)
 async def async_predict(request: AsyncPredictRequest, http_request: Request) -> AsyncPredictResponse:
+    kafka_client = getattr(http_request.app.state, "kafka_client", None)
     try:
-        await add_repo.get(request.item_id)
+        task_id, status = await moderation_service.enqueue(
+            item_id=request.item_id,
+            kafka_client=kafka_client,
+        )
     except AddNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Add not found") from exc
-
-    moderation_task = await moderation_repo.create_pending(request.item_id)
-
-    kafka_client = getattr(http_request.app.state, "kafka_client", None)
-    if kafka_client is None:
-        raise HTTPException(status_code=503, detail="Kafka is unavailable")
-
-    try:
-        await kafka_client.send_moderation_request(
-            item_id=request.item_id,
-            task_id=moderation_task.id,
-        )
+    except KafkaUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ModerationEnqueueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
-        await moderation_repo.mark_failed(moderation_task.id, str(exc))
         raise HTTPException(status_code=500, detail="Failed to enqueue moderation request") from exc
 
     return AsyncPredictResponse(
-        task_id=moderation_task.id,
-        status=moderation_task.status,
+        task_id=task_id,
+        status=status,
         message="Moderation request accepted",
     )
 
@@ -61,7 +59,7 @@ async def async_predict(request: AsyncPredictRequest, http_request: Request) -> 
 @router.get("/moderation_result/{task_id}", response_model=ModerationResultResponse)
 async def moderation_result(task_id: int) -> ModerationResultResponse:
     try:
-        result = await moderation_repo.get(task_id)
+        result = await moderation_service.get_result(task_id)
     except ModerationTaskNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Task not found") from exc
 

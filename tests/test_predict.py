@@ -1,10 +1,11 @@
-from typing import Mapping, Tuple
+from typing import Mapping, Callable
 import asyncio
 from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 from repositories.users import UserRepository
 from repositories.adds import AddRepository
+from errors import AddNotFoundError
 
 
 @pytest.fixture
@@ -18,34 +19,6 @@ def base_payload() -> Mapping[str, object]:
         'category': 10,
         'images_qty': 1,
     }
-
-
-def create_user_and_add(
-    *,
-    is_verified_seller: bool,
-    images_qty: int,
-) -> Tuple[int, int]:
-    user_repo = UserRepository()
-    add_repo = AddRepository()
-
-    user = asyncio.run(
-        user_repo.create(
-            name="Seller",
-            password="secret",
-            email="seller@example.com",
-            is_verified_seller=is_verified_seller,
-        )
-    )
-    add = asyncio.run(
-        add_repo.create(
-            seller_id=user.id,
-            name="Item",
-            description="Desc",
-            category=10,
-            images_qty=images_qty,
-        )
-    )
-    return user.id, add.id
 
 
 @pytest.mark.parametrize(
@@ -126,11 +99,9 @@ def test_simple_predict(
     is_verified_seller: bool,
     images_qty: int,
     expected_violation: bool,
+    create_user_and_add: Callable[[bool, int], tuple[int, int]],
 ) -> None:
-    _, add_id = create_user_and_add(
-        is_verified_seller=is_verified_seller,
-        images_qty=images_qty,
-    )
+    _, add_id = create_user_and_add(is_verified_seller, images_qty)
 
     response = app_client.get(f"/predict/simple_predict?item_id={add_id}")
 
@@ -140,7 +111,46 @@ def test_simple_predict(
     assert 0.0 <= data["probability"] <= 1.0
 
 
-def test_repositories_create_user_and_add() -> None:
+def test_simple_predict_model_unavailable(app_client: TestClient) -> None:
+    app = app_client.app
+    original_model = getattr(app.state, "model", None)
+    app.state.model = None
+    try:
+        response = app_client.get("/predict/simple_predict?item_id=1")
+    finally:
+        app.state.model = original_model
+
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert response.json()["detail"] == "Model is not loaded"
+
+
+def test_simple_predict_returns_404_for_missing_add(
+    app_client: TestClient,
+) -> None:
+    response = app_client.get("/predict/simple_predict?item_id=999999")
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()["detail"] == "Add or seller not found"
+
+
+def test_simple_predict_returns_404_for_missing_seller(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def raise_not_found(self: object, *_: object, **__: object) -> tuple[bool, float]:
+        raise AddNotFoundError()
+
+    monkeypatch.setattr(
+        "services.predict.PredictService.predict_by_item_id",
+        raise_not_found,
+    )
+    response = app_client.get("/predict/simple_predict?item_id=1")
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json()["detail"] == "Add or seller not found"
+
+
+def test_repositories_create_user_and_add(clean_db: None) -> None:
     user_repo = UserRepository()
     add_repo = AddRepository()
 

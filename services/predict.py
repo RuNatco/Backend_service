@@ -1,7 +1,10 @@
 import logging
+from dataclasses import dataclass
 from typing import Tuple, Any
 
 import numpy as np
+from errors import AddNotFoundError
+from repositories.adds import AddRepository
 
 logger = logging.getLogger(__name__)
 
@@ -53,3 +56,26 @@ def predict_violation(
     )
 
     return is_violation, probability
+
+
+@dataclass(frozen=True)
+class PredictService:
+    add_repo: AddRepository = AddRepository()
+
+    async def predict_by_item_id(
+        self,
+        *,
+        item_id: int,
+        model: Any,
+    ) -> Tuple[bool, float]:
+        add_with_seller = await self.add_repo.get_with_seller(item_id)
+
+        return predict_violation(
+            model=model,
+            seller_id=int(add_with_seller["seller_id"]),
+            item_id=int(add_with_seller["add_id"]),
+            is_verified_seller=bool(add_with_seller["is_verified_seller"]),
+            images_qty=int(add_with_seller["images_qty"]),
+            description=str(add_with_seller["description"]),
+            category=int(add_with_seller["category"]),
+        )

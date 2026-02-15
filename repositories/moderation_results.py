@@ -15,9 +15,10 @@ def _row_to_result(row: Any) -> ModerationResultModel:
 @dataclass(frozen=True)
 class ModerationResultRepository:
     dsn: Any = DB_DSN
+    connection_provider: Any = get_connection
 
     async def create_pending(self, item_id: int) -> ModerationResultModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -32,7 +33,7 @@ class ModerationResultRepository:
         return _row_to_result(row)
 
     async def get(self, task_id: int) -> ModerationResultModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT * FROM moderation_results WHERE id = %s LIMIT 1",
@@ -42,7 +43,7 @@ class ModerationResultRepository:
         return _row_to_result(row)
 
     async def get_latest_pending_by_item_id(self, item_id: int) -> ModerationResultModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -62,7 +63,7 @@ class ModerationResultRepository:
         is_violation: bool,
         probability: float,
     ) -> ModerationResultModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -82,7 +83,7 @@ class ModerationResultRepository:
         return _row_to_result(row)
 
     async def mark_failed(self, task_id: int, error_message: str) -> ModerationResultModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -100,7 +101,7 @@ class ModerationResultRepository:
         return _row_to_result(row)
 
     async def mark_retry(self, task_id: int, error_message: str) -> ModerationResultModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """

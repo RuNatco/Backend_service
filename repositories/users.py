@@ -18,6 +18,7 @@ def _row_to_user(row: Any) -> UserModel:
 @dataclass(frozen=True)
 class UserRepository:
     dsn: Any = DB_DSN
+    connection_provider: Any = get_connection
 
     async def create(
         self,
@@ -26,7 +27,7 @@ class UserRepository:
         email: str,
         is_verified_seller: bool = False,
     ) -> UserModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -41,7 +42,7 @@ class UserRepository:
         return _row_to_user(row)
 
     async def get_by_name_and_password(self, name: str, password: str) -> UserModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT * FROM users WHERE name = %s AND password = %s LIMIT 1",
@@ -51,7 +52,7 @@ class UserRepository:
         return _row_to_user(row)
 
     async def get(self, user_id: int) -> UserModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT * FROM users WHERE id = %s LIMIT 1",
@@ -62,7 +63,7 @@ class UserRepository:
 
     async def delete(self, user_id: int) -> UserModel:
         user = await self.get(user_id)
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
             conn.commit()
@@ -74,14 +75,14 @@ class UserRepository:
 
         fields = ", ".join(f"{key} = %s" for key in changes.keys())
         values = list(changes.values()) + [user_id]
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(f"UPDATE users SET {fields} WHERE id = %s", values)
             conn.commit()
         return await self.get(user_id)
 
     async def get_many(self) -> Sequence[UserModel]:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT * FROM users")
                 rows = cursor.fetchall()

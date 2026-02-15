@@ -1,10 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from services.predict import predict_violation
-from repositories.adds import AddRepository
-from repositories.users import UserRepository
-from errors import AddNotFoundError, UserNotFoundError
+from services.predict import PredictService, predict_violation
+from errors import AddNotFoundError
 
 
 class PredictRequest(BaseModel):
@@ -18,8 +16,7 @@ class PredictRequest(BaseModel):
 
 
 router = APIRouter(prefix='/predict')
-add_repo = AddRepository()
-user_repo = UserRepository()
+predict_service = PredictService()
 
 
 class PredictResponse(BaseModel):
@@ -58,21 +55,13 @@ async def simple_predict(item_id: int, http_request: Request) -> PredictResponse
         if model is None:
             raise HTTPException(status_code=503, detail="Model is not loaded")
 
-        add = await add_repo.get(item_id)
-        user = await user_repo.get(add.seller_id)
-
-        is_violation, probability = predict_violation(
+        is_violation, probability = await predict_service.predict_by_item_id(
+            item_id=item_id,
             model=model,
-            seller_id=user.id,
-            item_id=add.id,
-            is_verified_seller=user.is_verified_seller,
-            images_qty=add.images_qty,
-            description=add.description,
-            category=add.category,
         )
 
         return PredictResponse(is_violation=is_violation, probability=probability)
-    except (AddNotFoundError, UserNotFoundError):
+    except AddNotFoundError:
         raise HTTPException(status_code=404, detail="Add or seller not found")
     except Exception as exc:
         if isinstance(exc, HTTPException):

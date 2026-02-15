@@ -15,6 +15,7 @@ def _row_to_add(row: Any) -> AddModel:
 @dataclass(frozen=True)
 class AddRepository:
     dsn: Any = DB_DSN
+    connection_provider: Any = get_connection
 
     async def create(
         self,
@@ -24,7 +25,7 @@ class AddRepository:
         category: int,
         images_qty: int,
     ) -> AddModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
@@ -39,7 +40,7 @@ class AddRepository:
         return _row_to_add(row)
 
     async def get(self, add_id: int) -> AddModel:
-        with get_connection(self.dsn) as conn:
+        with self.connection_provider(self.dsn) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT * FROM adds WHERE id = %s LIMIT 1",
@@ -47,3 +48,27 @@ class AddRepository:
                 )
                 row = cursor.fetchone()
         return _row_to_add(row)
+
+    async def get_with_seller(self, add_id: int) -> dict[str, Any]:
+        with self.connection_provider(self.dsn) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT
+                        a.id AS add_id,
+                        a.description,
+                        a.category,
+                        a.images_qty,
+                        u.id AS seller_id,
+                        u.is_verified_seller
+                    FROM adds a
+                    JOIN users u ON u.id = a.seller_id
+                    WHERE a.id = %s
+                    LIMIT 1
+                    """,
+                    (add_id,),
+                )
+                row = cursor.fetchone()
+        if row is None:
+            raise AddNotFoundError()
+        return dict(row)
