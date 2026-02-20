@@ -11,6 +11,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 os.environ["DISABLE_KAFKA"] = "true"
+os.environ["DISABLE_REDIS"] = "true"
 
 from main import app
 from models.model import train_and_save_model
@@ -35,7 +36,7 @@ def migrated_db() -> None:
     apply_migrations(MIGRATIONS_DIR, DB_DSN)
 
 
-@pytest.fixture(scope="function", autouse=True)
+@pytest.fixture(scope="function")
 def clean_db(migrated_db: None) -> None:
     with get_connection(DB_DSN) as conn:
         with conn.cursor() as cursor:

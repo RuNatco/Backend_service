@@ -72,3 +72,11 @@ class AddRepository:
         if row is None:
             raise AddNotFoundError()
         return dict(row)
+
+    async def delete(self, add_id: int) -> AddModel:
+        add = await self.get(add_id)
+        with self.connection_provider(self.dsn) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM adds WHERE id = %s", (add_id,))
+            conn.commit()
+        return add

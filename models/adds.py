@@ -8,3 +8,4 @@ class AddModel(BaseModel):
     description: str = Field(..., min_length=1)
     category: int
     images_qty: int = Field(..., ge=0)
+    is_closed: bool = False

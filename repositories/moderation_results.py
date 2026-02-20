@@ -116,3 +116,21 @@ class ModerationResultRepository:
                 row = cursor.fetchone()
             conn.commit()
         return _row_to_result(row)
+
+    async def get_task_ids_by_item_id(self, item_id: int) -> list[int]:
+        with self.connection_provider(self.dsn) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT id FROM moderation_results WHERE item_id = %s ORDER BY id",
+                    (item_id,),
+                )
+                rows = cursor.fetchall()
+        return [int(row["id"]) for row in rows]
+
+    async def delete_by_item_id(self, item_id: int) -> int:
+        with self.connection_provider(self.dsn) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM moderation_results WHERE item_id = %s", (item_id,))
+                deleted = cursor.rowcount
+            conn.commit()
+        return int(deleted)

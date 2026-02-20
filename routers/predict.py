@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from services.predict import PredictService, predict_violation
+from services.predict import PredictService
 from errors import AddNotFoundError
 
 
@@ -28,17 +28,15 @@ class PredictResponse(BaseModel):
 async def predict(request: PredictRequest, http_request: Request) -> PredictResponse:
     try:
         model = getattr(http_request.app.state, "model", None)
+        cache_storage = getattr(http_request.app.state, "prediction_cache", None)
         if model is None:
             raise HTTPException(status_code=503, detail="Model is not loaded")
 
-        is_violation, probability = predict_violation(
+        payload = request.model_dump() if hasattr(request, "model_dump") else request.dict()
+        is_violation, probability = await predict_service.predict_from_payload(
+            payload=payload,
             model=model,
-            seller_id=request.seller_id,
-            item_id=request.item_id,
-            is_verified_seller=request.is_verified_seller,
-            images_qty=request.images_qty,
-            description=request.description,
-            category=request.category,
+            cache_storage=cache_storage,
         )
 
         return PredictResponse(is_violation=is_violation, probability=probability)
@@ -52,12 +50,14 @@ async def predict(request: PredictRequest, http_request: Request) -> PredictResp
 async def simple_predict(item_id: int, http_request: Request) -> PredictResponse:
     try:
         model = getattr(http_request.app.state, "model", None)
+        cache_storage = getattr(http_request.app.state, "prediction_cache", None)
         if model is None:
             raise HTTPException(status_code=503, detail="Model is not loaded")
 
         is_violation, probability = await predict_service.predict_by_item_id(
             item_id=item_id,
             model=model,
+            cache_storage=cache_storage,
         )
 
         return PredictResponse(is_violation=is_violation, probability=probability)

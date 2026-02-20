@@ -5,10 +5,13 @@ from typing import Any, Callable
 from fastapi.testclient import TestClient
 import pytest
 
+from errors import AddNotFoundError, ModerationTaskNotFoundError
 from repositories.adds import AddRepository
 from repositories.moderation_results import ModerationResultRepository
 from repositories.users import UserRepository
 from workers.moderation_worker import process_moderation_message
+
+pytestmark = pytest.mark.integration
 
 
 class _KafkaStub:
@@ -108,6 +111,28 @@ def test_moderation_result_endpoint_returns_404_for_missing_task(
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()["detail"] == "Task not found"
+
+
+def test_close_add_removes_add_and_results(
+    app_client: TestClient,
+    create_user_and_add: Callable[[bool, int], tuple[int, int]],
+) -> None:
+    _, add_id = create_user_and_add(False, 0)
+    moderation_repo = ModerationResultRepository()
+    add_repo = AddRepository()
+    task = asyncio.run(moderation_repo.create_pending(add_id))
+
+    response = app_client.post(f"/close?item_id={add_id}")
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.json()
+    assert body["item_id"] == add_id
+    assert body["status"] == "closed"
+
+    with pytest.raises(AddNotFoundError):
+        asyncio.run(add_repo.get(add_id))
+    with pytest.raises(ModerationTaskNotFoundError):
+        asyncio.run(moderation_repo.get(task.id))
 
 
 def test_worker_processes_message(

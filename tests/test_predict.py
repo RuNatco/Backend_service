@@ -7,6 +7,8 @@ from repositories.users import UserRepository
 from repositories.adds import AddRepository
 from errors import AddNotFoundError
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def base_payload() -> Mapping[str, object]:
@@ -76,10 +78,10 @@ def test_prediction_error_returns_500(
     base_payload: Mapping[str, object],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def explode(*_: object, **__: object) -> tuple[bool, float]:
+    async def explode(self: object, *_: object, **__: object) -> tuple[bool, float]:
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("routers.predict.predict_violation", explode)
+    monkeypatch.setattr("services.predict.PredictService.predict_from_payload", explode)
 
     response = app_client.post('/predict', json=base_payload)
 

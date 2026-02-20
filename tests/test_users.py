@@ -4,6 +4,8 @@ from fastapi.testclient import TestClient
 from main import app
 from http import HTTPStatus
 
+pytestmark = pytest.mark.integration
+
 PASSWORD = 'qwerty'
 
 

@@ -1,10 +1,11 @@
 import logging
 from dataclasses import dataclass
-from typing import Tuple, Any
+from typing import Tuple, Any, Optional
 
 import numpy as np
 from errors import AddNotFoundError
 from repositories.adds import AddRepository
+from storages.prediction_cache import PredictionCacheStorage
 
 logger = logging.getLogger(__name__)
 
@@ -62,15 +63,28 @@ def predict_violation(
 class PredictService:
     add_repo: AddRepository = AddRepository()
 
+    @staticmethod
+    def _result_dict(is_violation: bool, probability: float) -> dict[str, Any]:
+        return {
+            "is_violation": bool(is_violation),
+            "probability": float(probability),
+        }
+
     async def predict_by_item_id(
         self,
         *,
         item_id: int,
         model: Any,
+        cache_storage: Optional[PredictionCacheStorage] = None,
     ) -> Tuple[bool, float]:
+        if cache_storage is not None:
+            cached = await cache_storage.get_simple_prediction(item_id)
+            if cached is not None:
+                return bool(cached["is_violation"]), float(cached["probability"])
+
         add_with_seller = await self.add_repo.get_with_seller(item_id)
 
-        return predict_violation(
+        is_violation, probability = predict_violation(
             model=model,
             seller_id=int(add_with_seller["seller_id"]),
             item_id=int(add_with_seller["add_id"]),
@@ -79,3 +93,42 @@ class PredictService:
             description=str(add_with_seller["description"]),
             category=int(add_with_seller["category"]),
         )
+        if cache_storage is not None:
+            await cache_storage.set_simple_prediction(
+                item_id,
+                self._result_dict(is_violation, probability),
+            )
+        return is_violation, probability
+
+    async def predict_from_payload(
+        self,
+        *,
+        payload: dict[str, Any],
+        model: Any,
+        cache_storage: Optional[PredictionCacheStorage] = None,
+    ) -> Tuple[bool, float]:
+        item_id = int(payload["item_id"])
+        if cache_storage is not None:
+            cached = await cache_storage.get_sync_prediction(
+                item_id=item_id,
+                payload=payload,
+            )
+            if cached is not None:
+                return bool(cached["is_violation"]), float(cached["probability"])
+
+        is_violation, probability = predict_violation(
+            model=model,
+            seller_id=int(payload["seller_id"]),
+            item_id=item_id,
+            is_verified_seller=bool(payload["is_verified_seller"]),
+            images_qty=int(payload["images_qty"]),
+            description=str(payload["description"]),
+            category=int(payload["category"]),
+        )
+        if cache_storage is not None:
+            await cache_storage.set_sync_prediction(
+                item_id=item_id,
+                payload=payload,
+                result=self._result_dict(is_violation, probability),
+            )
+        return is_violation, probability

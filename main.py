@@ -11,6 +11,8 @@ from models.model import load_model, load_model_from_mlflow, train_and_save_mode
 from db.connection import DB_DSN
 from db.migrate import apply_migrations
 from clients.kafka import KafkaClient
+from clients.redis import RedisClient
+from storages.prediction_cache import PredictionCacheStorage
 
 logging.basicConfig(level=logging.INFO)
 
@@ -20,8 +22,12 @@ async def lifespan(app: FastAPI):
     migrations_dir = Path(__file__).resolve().parent / "db"
     use_mlflow = os.getenv("USE_MLFLOW", "false").lower() == "true"
     disable_kafka = os.getenv("DISABLE_KAFKA", "false").lower() == "true"
+    disable_redis = os.getenv("DISABLE_REDIS", "false").lower() == "true"
     kafka_client = None if disable_kafka else KafkaClient()
+    redis_client = None if disable_redis else RedisClient()
     app.state.kafka_client = kafka_client
+    app.state.redis_client = redis_client
+    app.state.prediction_cache = None
     try:
         apply_migrations(migrations_dir, DB_DSN)
     except Exception as exc:
@@ -29,6 +35,15 @@ async def lifespan(app: FastAPI):
         raise
 
     try:
+        if redis_client is not None:
+            try:
+                await redis_client.start()
+                app.state.prediction_cache = PredictionCacheStorage(redis_client.client)
+            except Exception as exc:
+                logging.exception("Failed to start Redis client: %s", exc)
+                app.state.redis_client = None
+                app.state.prediction_cache = None
+
         if kafka_client is not None:
             try:
                 await kafka_client.start()
@@ -49,6 +64,8 @@ async def lifespan(app: FastAPI):
         logging.exception("Failed to load model: %s", exc)
         app.state.model = None
     yield
+    if redis_client is not None:
+        await redis_client.stop()
     if kafka_client is not None:
         await kafka_client.stop()
 
