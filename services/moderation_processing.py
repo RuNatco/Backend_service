@@ -2,6 +2,7 @@ import asyncio
 import os
 from typing import Any
 
+from app.sentry import report_exception
 from clients.kafka import KafkaClient
 from repositories.adds import AddRepository
 from repositories.moderation_results import ModerationResultRepository
@@ -39,6 +40,7 @@ async def process_moderation_message(
         )
         await moderation_repo.mark_completed(task_id, is_violation, probability)
     except Exception as exc:
+        report_exception(exc)
         is_temporary = isinstance(exc, TEMPORARY_ERRORS)
         if is_temporary and retry_count < MAX_RETRY_COUNT:
             await moderation_repo.mark_retry(task_id, str(exc))

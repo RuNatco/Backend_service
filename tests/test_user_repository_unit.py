@@ -30,15 +30,16 @@ RAW_UPDATED_DB_USER = {
 
 
 def _connection_provider_with_row(row: dict) -> MagicMock:
-    cursor = MagicMock()
-    cursor.__enter__.return_value = cursor
-    cursor.fetchone.return_value = row
+    connection = MagicMock()
+    connection.fetchrow = AsyncMock(return_value=row)
+    connection.fetch = AsyncMock(return_value=[row])
+    connection.execute = AsyncMock(return_value="DELETE 1")
 
-    conn = MagicMock()
-    conn.__enter__.return_value = conn
-    conn.cursor.return_value = cursor
+    context_manager = MagicMock()
+    context_manager.__aenter__ = AsyncMock(return_value=connection)
+    context_manager.__aexit__ = AsyncMock(return_value=None)
 
-    return MagicMock(return_value=conn)
+    return MagicMock(return_value=context_manager)
 
 
 def test_user_repository_get_cache_hit() -> None:
@@ -67,7 +68,7 @@ def test_user_repository_get_cache_miss_sets_cache() -> None:
 
     assert user.id == 6
     cache.get_user.assert_awaited_once_with(6)
-    connection_provider.assert_called_once()
+    connection_provider.assert_called_once_with(user_repo.dsn)
     cache.set_user.assert_awaited_once()
 
 
@@ -81,8 +82,7 @@ def test_user_repository_update_refreshes_cache() -> None:
     user = asyncio.run(user_repo.update(6, name="Updated User"))
 
     assert user.name == "Updated User"
-    cache.set_user.assert_awaited()
-    assert cache.set_user.await_count >= 1
+    cache.set_user.assert_awaited_once()
 
 
 def test_user_repository_delete_invalidates_cache() -> None:

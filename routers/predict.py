@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.metrics import observe_prediction_error
+from app.sentry import report_exception
 from services.predict import PredictService
 from errors import AddNotFoundError
 
@@ -30,6 +32,8 @@ async def predict(request: PredictRequest, http_request: Request) -> PredictResp
         model = getattr(http_request.app.state, "model", None)
         cache_storage = getattr(http_request.app.state, "prediction_cache", None)
         if model is None:
+            observe_prediction_error("model_unavailable")
+            report_exception(RuntimeError("Model is not loaded"))
             raise HTTPException(status_code=503, detail="Model is not loaded")
 
         payload = request.model_dump() if hasattr(request, "model_dump") else request.dict()
@@ -43,6 +47,8 @@ async def predict(request: PredictRequest, http_request: Request) -> PredictResp
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise
+        observe_prediction_error("prediction_error")
+        report_exception(exc)
         raise HTTPException(status_code=500, detail='Prediction failed') from exc
 
 
@@ -52,6 +58,8 @@ async def simple_predict(item_id: int, http_request: Request) -> PredictResponse
         model = getattr(http_request.app.state, "model", None)
         cache_storage = getattr(http_request.app.state, "prediction_cache", None)
         if model is None:
+            observe_prediction_error("model_unavailable")
+            report_exception(RuntimeError("Model is not loaded"))
             raise HTTPException(status_code=503, detail="Model is not loaded")
 
         is_violation, probability = await predict_service.predict_by_item_id(
@@ -61,10 +69,13 @@ async def simple_predict(item_id: int, http_request: Request) -> PredictResponse
         )
 
         return PredictResponse(is_violation=is_violation, probability=probability)
-    except AddNotFoundError:
+    except AddNotFoundError as exc:
+        report_exception(exc)
         raise HTTPException(status_code=404, detail="Add or seller not found")
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise
+        observe_prediction_error("prediction_error")
+        report_exception(exc)
         raise HTTPException(status_code=500, detail='Prediction failed') from exc
 

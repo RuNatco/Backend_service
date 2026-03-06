@@ -33,17 +33,18 @@ def model_file() -> Path:
 
 @pytest.fixture(scope="session")
 def migrated_db() -> None:
-    apply_migrations(MIGRATIONS_DIR, DB_DSN)
+    asyncio.run(apply_migrations(MIGRATIONS_DIR, DB_DSN))
 
 
 @pytest.fixture(scope="function")
 def clean_db(migrated_db: None) -> None:
-    with get_connection(DB_DSN) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("TRUNCATE TABLE moderation_results RESTART IDENTITY CASCADE")
-            cursor.execute("TRUNCATE TABLE adds RESTART IDENTITY CASCADE")
-            cursor.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
-        conn.commit()
+    async def _clean() -> None:
+        async with get_connection(DB_DSN) as conn:
+            await conn.execute("TRUNCATE TABLE moderation_results RESTART IDENTITY CASCADE")
+            await conn.execute("TRUNCATE TABLE adds RESTART IDENTITY CASCADE")
+            await conn.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
+
+    asyncio.run(_clean())
 
 
 @pytest.fixture

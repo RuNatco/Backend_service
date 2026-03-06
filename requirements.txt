@@ -8,7 +8,8 @@ scikit-learn
 numpy
 mlflow
 joblib
-psycopg2-binary
 asyncpg
 aiokafka
 redis
+prometheus-client
+sentry-sdk[fastapi]

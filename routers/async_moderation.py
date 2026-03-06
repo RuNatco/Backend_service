@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+from app.sentry import report_exception
 from errors import (
     AddNotFoundError,
     KafkaUnavailableError,
@@ -47,12 +48,16 @@ async def async_predict(request: AsyncPredictRequest, http_request: Request) -> 
             kafka_client=kafka_client,
         )
     except AddNotFoundError as exc:
+        report_exception(exc)
         raise HTTPException(status_code=404, detail="Add not found") from exc
     except KafkaUnavailableError as exc:
+        report_exception(exc)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ModerationEnqueueError as exc:
+        report_exception(exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
+        report_exception(exc)
         raise HTTPException(status_code=500, detail="Failed to enqueue moderation request") from exc
 
     return AsyncPredictResponse(
@@ -68,6 +73,7 @@ async def moderation_result(task_id: int, http_request: Request) -> ModerationRe
     try:
         result = await moderation_service.get_result(task_id, cache_storage=cache_storage)
     except ModerationTaskNotFoundError as exc:
+        report_exception(exc)
         raise HTTPException(status_code=404, detail="Task not found") from exc
 
     return ModerationResultResponse(
@@ -85,6 +91,7 @@ async def close_add(item_id: int, http_request: Request) -> CloseAddResponse:
     try:
         await moderation_service.close_item(item_id, cache_storage=cache_storage)
     except AddNotFoundError as exc:
+        report_exception(exc)
         raise HTTPException(status_code=404, detail="Add not found") from exc
 
     return CloseAddResponse(

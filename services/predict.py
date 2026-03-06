@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Tuple, Any, Optional
 
 import numpy as np
+from app.metrics import observe_prediction_result, track_prediction_duration
 from errors import AddNotFoundError
 from repositories.adds import AddRepository
 from storages.prediction_cache import PredictionCacheStorage
@@ -47,8 +48,9 @@ def predict_violation(
         features.tolist()[0],
     )
 
-    probability = float(model.predict_proba(features)[0][1])
-    is_violation = bool(model.predict(features)[0])
+    with track_prediction_duration():
+        probability = float(model.predict_proba(features)[0][1])
+        is_violation = bool(model.predict(features)[0])
 
     logger.info(
         "predict_response is_violation=%s probability=%.6f",
@@ -98,6 +100,7 @@ class PredictService:
                 item_id,
                 self._result_dict(is_violation, probability),
             )
+        observe_prediction_result(is_violation, probability)
         return is_violation, probability
 
     async def predict_from_payload(
@@ -131,4 +134,5 @@ class PredictService:
                 payload=payload,
                 result=self._result_dict(is_violation, probability),
             )
+        observe_prediction_result(is_violation, probability)
         return is_violation, probability
