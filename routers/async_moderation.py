@@ -1,13 +1,15 @@
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from app.sentry import report_exception
+from dependencies.auth import get_current_account
 from errors import (
     AddNotFoundError,
     KafkaUnavailableError,
     ModerationEnqueueError,
     ModerationTaskNotFoundError,
 )
+from models.accounts import AccountModel
 from services.moderation import ModerationService
 
 
@@ -40,7 +42,12 @@ class CloseAddResponse(BaseModel):
 
 
 @router.post("/async_predict", response_model=AsyncPredictResponse)
-async def async_predict(request: AsyncPredictRequest, http_request: Request) -> AsyncPredictResponse:
+async def async_predict(
+    request: AsyncPredictRequest,
+    http_request: Request,
+    current_account: AccountModel = Depends(get_current_account),
+) -> AsyncPredictResponse:
+    _ = current_account
     kafka_client = getattr(http_request.app.state, "kafka_client", None)
     try:
         task_id, status = await moderation_service.enqueue(
@@ -68,7 +75,12 @@ async def async_predict(request: AsyncPredictRequest, http_request: Request) -> 
 
 
 @router.get("/moderation_result/{task_id}", response_model=ModerationResultResponse)
-async def moderation_result(task_id: int, http_request: Request) -> ModerationResultResponse:
+async def moderation_result(
+    task_id: int,
+    http_request: Request,
+    current_account: AccountModel = Depends(get_current_account),
+) -> ModerationResultResponse:
+    _ = current_account
     cache_storage = getattr(http_request.app.state, "prediction_cache", None)
     try:
         result = await moderation_service.get_result(task_id, cache_storage=cache_storage)
@@ -86,7 +98,12 @@ async def moderation_result(task_id: int, http_request: Request) -> ModerationRe
 
 
 @router.post("/close", response_model=CloseAddResponse)
-async def close_add(item_id: int, http_request: Request) -> CloseAddResponse:
+async def close_add(
+    item_id: int,
+    http_request: Request,
+    current_account: AccountModel = Depends(get_current_account),
+) -> CloseAddResponse:
+    _ = current_account
     cache_storage = getattr(http_request.app.state, "prediction_cache", None)
     try:
         await moderation_service.close_item(item_id, cache_storage=cache_storage)

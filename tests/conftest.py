@@ -17,8 +17,10 @@ from main import app
 from models.model import train_and_save_model
 from db.connection import DB_DSN, get_connection
 from db.migrate import apply_migrations
+from repositories.accounts import AccountRepository
 from repositories.users import UserRepository
 from repositories.adds import AddRepository
+from services.auth import AUTH_COOKIE_NAME, AuthService
 
 MODEL_PATH = Path(ROOT_DIR) / "model.pkl"
 MIGRATIONS_DIR = Path(ROOT_DIR) / "db"
@@ -40,6 +42,7 @@ def migrated_db() -> None:
 def clean_db(migrated_db: None) -> None:
     async def _clean() -> None:
         async with get_connection(DB_DSN) as conn:
+            await conn.execute("TRUNCATE TABLE account RESTART IDENTITY CASCADE")
             await conn.execute("TRUNCATE TABLE moderation_results RESTART IDENTITY CASCADE")
             await conn.execute("TRUNCATE TABLE adds RESTART IDENTITY CASCADE")
             await conn.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
@@ -51,6 +54,20 @@ def clean_db(migrated_db: None) -> None:
 def app_client(model_file: Path, clean_db: None) -> Generator[TestClient, None, None]:
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture(scope="function")
+def auth_cookie(clean_db: None) -> str:
+    account = asyncio.run(AccountRepository().create(login="test_login", password="test_password"))
+    token = AuthService().create_access_token(account)
+    return token
+
+
+@pytest.fixture(scope="function")
+def authorized_app_client(app_client: TestClient, auth_cookie: str) -> Generator[TestClient, None, None]:
+    app_client.cookies.set(AUTH_COOKIE_NAME, auth_cookie)
+    yield app_client
+    app_client.cookies.clear()
 
 
 @pytest.fixture(scope='function')

@@ -9,7 +9,7 @@ import asyncpg
 
 DB_DSN = os.getenv(
     "DB_DSN",
-    "postgresql://backend_user:backend_pass@127.0.0.1:5433/backend_hw",
+    "postgresql://postgres:postgres@127.0.0.1:5435/hw",
 )
 DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "1"))
 DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "10"))

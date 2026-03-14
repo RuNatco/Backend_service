@@ -13,6 +13,10 @@ from routers.async_moderation import (
     moderation_result,
 )
 from routers.predict import PredictRequest, predict, simple_predict
+from models.accounts import AccountModel
+
+
+ACCOUNT = AccountModel(id=1, login="test_login", password="hashed", is_blocked=False)
 
 
 def test_predict_handler_uses_service_without_db(monkeypatch) -> None:
@@ -32,7 +36,7 @@ def test_predict_handler_uses_service_without_db(monkeypatch) -> None:
     )
     http_request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(model=object(), prediction_cache=None)))
 
-    resp = asyncio.run(predict(req, http_request))
+    resp = asyncio.run(predict(req, http_request, ACCOUNT))
 
     assert resp.is_violation is False
     assert resp.probability == 0.1
@@ -46,7 +50,7 @@ def test_simple_predict_handler_returns_404_on_not_found(monkeypatch) -> None:
     http_request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(model=object(), prediction_cache=None)))
 
     try:
-        asyncio.run(simple_predict(1, http_request))
+        asyncio.run(simple_predict(1, http_request, ACCOUNT))
         assert False, "Expected HTTPException"
     except HTTPException as exc:
         assert exc.status_code == 404
@@ -73,9 +77,9 @@ def test_async_handlers_with_mocked_service(monkeypatch) -> None:
     monkeypatch.setattr("services.moderation.ModerationService.close_item", fake_close)
 
     http_request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(kafka_client=object(), prediction_cache=None)))
-    enqueue_resp = asyncio.run(async_predict(AsyncPredictRequest(item_id=10), http_request))
-    result_resp = asyncio.run(moderation_result(5, http_request))
-    close_resp = asyncio.run(close_add(10, http_request))
+    enqueue_resp = asyncio.run(async_predict(AsyncPredictRequest(item_id=10), http_request, ACCOUNT))
+    result_resp = asyncio.run(moderation_result(5, http_request, ACCOUNT))
+    close_resp = asyncio.run(close_add(10, http_request, ACCOUNT))
 
     assert enqueue_resp.task_id == 5
     assert result_resp.status == "completed"
@@ -90,7 +94,7 @@ def test_moderation_result_handler_not_found(monkeypatch) -> None:
     http_request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(prediction_cache=None)))
 
     try:
-        asyncio.run(moderation_result(999, http_request))
+        asyncio.run(moderation_result(999, http_request, ACCOUNT))
         assert False, "Expected HTTPException"
     except HTTPException as exc:
         assert exc.status_code == 404

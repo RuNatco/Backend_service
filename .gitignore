@@ -4,6 +4,11 @@
 /routers/__pycache__
 /services/__pycache__
 /tests/__pycache__
+/db/__pycache__
+/app/__pycache__
+/clients/__pycache__
+/storages/__pycache__
+/workers/__pycache__
 /.venv/
 /.pytest_cache
 /.idea/

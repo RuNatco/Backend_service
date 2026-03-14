@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.metrics import observe_prediction_error
 from app.sentry import report_exception
+from dependencies.auth import get_current_account
+from models.accounts import AccountModel
 from services.predict import PredictService
 from errors import AddNotFoundError
 
@@ -27,8 +29,13 @@ class PredictResponse(BaseModel):
 
 
 @router.post('/', response_model=PredictResponse, summary='Predict if listing is violating')
-async def predict(request: PredictRequest, http_request: Request) -> PredictResponse:
+async def predict(
+    request: PredictRequest,
+    http_request: Request,
+    current_account: AccountModel = Depends(get_current_account),
+) -> PredictResponse:
     try:
+        _ = current_account
         model = getattr(http_request.app.state, "model", None)
         cache_storage = getattr(http_request.app.state, "prediction_cache", None)
         if model is None:
@@ -53,8 +60,13 @@ async def predict(request: PredictRequest, http_request: Request) -> PredictResp
 
 
 @router.get('/simple_predict', response_model=PredictResponse, summary='Predict by item_id only')
-async def simple_predict(item_id: int, http_request: Request) -> PredictResponse:
+async def simple_predict(
+    item_id: int,
+    http_request: Request,
+    current_account: AccountModel = Depends(get_current_account),
+) -> PredictResponse:
     try:
+        _ = current_account
         model = getattr(http_request.app.state, "model", None)
         cache_storage = getattr(http_request.app.state, "prediction_cache", None)
         if model is None:

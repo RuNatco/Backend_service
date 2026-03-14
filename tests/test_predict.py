@@ -31,14 +31,14 @@ def base_payload() -> Mapping[str, object]:
     ],
 )
 def test_predict(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     base_payload: Mapping[str, object],
     overrides: Mapping[str, object],
     expected_violation: bool,
 ) -> None:
     payload = {**base_payload, **overrides}
 
-    response = app_client.post('/predict', json=payload)
+    response = authorized_app_client.post('/predict', json=payload)
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
@@ -47,25 +47,25 @@ def test_predict(
 
 
 def test_validation_error(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     base_payload: Mapping[str, object],
 ) -> None:
     payload = {**base_payload, 'seller_id': 'wrong-type'}
 
-    response = app_client.post('/predict', json=payload)
+    response = authorized_app_client.post('/predict', json=payload)
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
 def test_model_unavailable(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     base_payload: Mapping[str, object],
 ) -> None:
-    app = app_client.app
+    app = authorized_app_client.app
     original_model = getattr(app.state, "model", None)
     app.state.model = None
     try:
-        response = app_client.post('/predict', json=base_payload)
+        response = authorized_app_client.post('/predict', json=base_payload)
     finally:
         app.state.model = original_model
 
@@ -74,7 +74,7 @@ def test_model_unavailable(
 
 
 def test_prediction_error_returns_500(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     base_payload: Mapping[str, object],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -83,7 +83,7 @@ def test_prediction_error_returns_500(
 
     monkeypatch.setattr("services.predict.PredictService.predict_from_payload", explode)
 
-    response = app_client.post('/predict', json=base_payload)
+    response = authorized_app_client.post('/predict', json=base_payload)
 
     assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert response.json()['detail'] == 'Prediction failed'
@@ -97,7 +97,7 @@ def test_prediction_error_returns_500(
     ],
 )
 def test_simple_predict(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     is_verified_seller: bool,
     images_qty: int,
     expected_violation: bool,
@@ -105,7 +105,7 @@ def test_simple_predict(
 ) -> None:
     _, add_id = create_user_and_add(is_verified_seller, images_qty)
 
-    response = app_client.get(f"/predict/simple_predict?item_id={add_id}")
+    response = authorized_app_client.get(f"/predict/simple_predict?item_id={add_id}")
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
@@ -113,12 +113,12 @@ def test_simple_predict(
     assert 0.0 <= data["probability"] <= 1.0
 
 
-def test_simple_predict_model_unavailable(app_client: TestClient) -> None:
-    app = app_client.app
+def test_simple_predict_model_unavailable(authorized_app_client: TestClient) -> None:
+    app = authorized_app_client.app
     original_model = getattr(app.state, "model", None)
     app.state.model = None
     try:
-        response = app_client.get("/predict/simple_predict?item_id=1")
+        response = authorized_app_client.get("/predict/simple_predict?item_id=1")
     finally:
         app.state.model = original_model
 
@@ -127,16 +127,16 @@ def test_simple_predict_model_unavailable(app_client: TestClient) -> None:
 
 
 def test_simple_predict_returns_404_for_missing_add(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
 ) -> None:
-    response = app_client.get("/predict/simple_predict?item_id=999999")
+    response = authorized_app_client.get("/predict/simple_predict?item_id=999999")
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()["detail"] == "Add or seller not found"
 
 
 def test_simple_predict_returns_404_for_missing_seller(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def raise_not_found(self: object, *_: object, **__: object) -> tuple[bool, float]:
@@ -146,7 +146,7 @@ def test_simple_predict_returns_404_for_missing_seller(
         "services.predict.PredictService.predict_by_item_id",
         raise_not_found,
     )
-    response = app_client.get("/predict/simple_predict?item_id=1")
+    response = authorized_app_client.get("/predict/simple_predict?item_id=1")
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()["detail"] == "Add or seller not found"
@@ -177,4 +177,10 @@ def test_repositories_create_user_and_add(clean_db: None) -> None:
     assert user.id
     assert add.id
     assert add.seller_id == user.id
+
+
+def test_predict_requires_authentication(app_client: TestClient, base_payload: Mapping[str, object]) -> None:
+    response = app_client.post("/predict", json=base_payload)
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
 

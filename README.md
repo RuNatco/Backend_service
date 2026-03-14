@@ -8,10 +8,16 @@ docker compose up -d
 
 После этого:
 - API на `http://localhost:8003`
+- Postgres на `localhost:5435` (`postgres` / `postgres`, БД `hw`)
 - Kafka на `localhost:9092`
 - Вэб-консоль для просмотра топиков и сообщений на `http://localhost:8080`
 - Prometheus на `http://localhost:9090`
 - Grafana на `http://localhost:3000` (`admin` / `admin`)
+
+Авторизация:
+- `POST /login` принимает `login` и `password`
+- в cookies сохраняется JWT-токен `access_token`
+- ручки предсказаний требуют авторизацию
 
 2. Запуск воркера (локально):
 

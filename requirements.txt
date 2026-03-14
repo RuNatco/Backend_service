@@ -13,3 +13,4 @@ aiokafka
 redis
 prometheus-client
 sentry-sdk[fastapi]
+pyjwt

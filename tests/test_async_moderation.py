@@ -45,14 +45,14 @@ class _KafkaStub:
 
 
 def test_async_predict_creates_task(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     create_user_and_add: Callable[[bool, int], tuple[int, int]],
 ) -> None:
     _, add_id = create_user_and_add(False, 0)
     kafka_stub = _KafkaStub()
-    app_client.app.state.kafka_client = kafka_stub
+    authorized_app_client.app.state.kafka_client = kafka_stub
 
-    response = app_client.post("/async_predict", json={"item_id": add_id})
+    response = authorized_app_client.post("/async_predict", json={"item_id": add_id})
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
@@ -62,39 +62,39 @@ def test_async_predict_creates_task(
 
 
 def test_async_predict_returns_404_for_missing_add(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
 ) -> None:
     kafka_stub = _KafkaStub()
-    app_client.app.state.kafka_client = kafka_stub
+    authorized_app_client.app.state.kafka_client = kafka_stub
 
-    response = app_client.post("/async_predict", json={"item_id": 999999})
+    response = authorized_app_client.post("/async_predict", json={"item_id": 999999})
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()["detail"] == "Add not found"
 
 
 def test_async_predict_returns_503_without_kafka(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     create_user_and_add: Callable[[bool, int], tuple[int, int]],
 ) -> None:
     _, add_id = create_user_and_add(False, 0)
-    app_client.app.state.kafka_client = None
+    authorized_app_client.app.state.kafka_client = None
 
-    response = app_client.post("/async_predict", json={"item_id": add_id})
+    response = authorized_app_client.post("/async_predict", json={"item_id": add_id})
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert response.json()["detail"] == "Kafka is unavailable"
 
 
 def test_moderation_result_endpoint(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     create_user_and_add: Callable[[bool, int], tuple[int, int]],
 ) -> None:
     _, add_id = create_user_and_add(False, 0)
     repo = ModerationResultRepository()
     task = asyncio.run(repo.create_pending(add_id))
 
-    response = app_client.get(f"/moderation_result/{task.id}")
+    response = authorized_app_client.get(f"/moderation_result/{task.id}")
 
     assert response.status_code == HTTPStatus.OK
     data = response.json()
@@ -105,16 +105,16 @@ def test_moderation_result_endpoint(
 
 
 def test_moderation_result_endpoint_returns_404_for_missing_task(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
 ) -> None:
-    response = app_client.get("/moderation_result/999999")
+    response = authorized_app_client.get("/moderation_result/999999")
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()["detail"] == "Task not found"
 
 
 def test_close_add_removes_add_and_results(
-    app_client: TestClient,
+    authorized_app_client: TestClient,
     create_user_and_add: Callable[[bool, int], tuple[int, int]],
 ) -> None:
     _, add_id = create_user_and_add(False, 0)
@@ -122,7 +122,7 @@ def test_close_add_removes_add_and_results(
     add_repo = AddRepository()
     task = asyncio.run(moderation_repo.create_pending(add_id))
 
-    response = app_client.post(f"/close?item_id={add_id}")
+    response = authorized_app_client.post(f"/close?item_id={add_id}")
 
     assert response.status_code == HTTPStatus.OK
     body = response.json()
@@ -133,6 +133,12 @@ def test_close_add_removes_add_and_results(
         asyncio.run(add_repo.get(add_id))
     with pytest.raises(ModerationTaskNotFoundError):
         asyncio.run(moderation_repo.get(task.id))
+
+
+def test_async_predict_requires_authentication(app_client: TestClient) -> None:
+    response = app_client.post("/async_predict", json={"item_id": 1})
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
 
 
 def test_worker_processes_message(

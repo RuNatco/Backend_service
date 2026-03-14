@@ -1,8 +1,10 @@
 from typing import Any, Mapping, Generator
+import asyncio
 import pytest
 from fastapi.testclient import TestClient
 from main import app
 from http import HTTPStatus
+from repositories.accounts import AccountRepository
 
 pytestmark = pytest.mark.integration
 
@@ -84,21 +86,21 @@ def test_get_many_users(
     assert len(users) == 0
 
 
-@pytest.mark.parametrize('name', ['Иванов И.И.'])
-@pytest.mark.parametrize('password', [PASSWORD])
 def test_login_user(
     app_client: TestClient,
-    some_user: Mapping[str, Any]
+    clean_db: None,
 ):
+    account = asyncio.run(AccountRepository().create(login="login_user", password=PASSWORD))
     login_response = app_client.post(f'/login', json=dict(
-        name=some_user['name'],
+        login="login_user",
         password=PASSWORD,
     ))
-    assert login_response.status_code == HTTPStatus.OK
-    assert login_response.cookies.get('x-user-id') == str(some_user['id'])
+    assert login_response.status_code == HTTPStatus.OK, login_response.json()
+    assert login_response.cookies.get('access_token')
 
     logged_user = login_response.json()
-    assert logged_user['id'] == some_user['id']
+    assert logged_user['id'] == account.id
+    assert logged_user['login'] == account.login
 
 
 @pytest.mark.parametrize('name', ['Иванов И.И.'])

@@ -3,7 +3,7 @@ services:
     build: .
     command: uvicorn main:app --host 0.0.0.0 --port 8003
     environment:
-      DB_DSN: postgresql://backend_user:backend_pass@postgres:5432/backend_hw
+      DB_DSN: postgresql://postgres:postgres@postgres:5432/hw
       KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
       REDIS_URL: redis://redis:6379/0
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -18,13 +18,13 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: backend_hw
-      POSTGRES_USER: backend_user
-      POSTGRES_PASSWORD: backend_pass
+      POSTGRES_DB: hw
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-      - "5433:5432"
+      - "5435:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
 
   redpanda:
     image: redpandadata/redpanda:latest
@@ -82,4 +82,4 @@ services:
       - prometheus
 
 volumes:
-  postgres_data:
+  pg_data:

@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException, status, Response, Request
 from typing import Sequence
 from pydantic import BaseModel
+from models.accounts import AccountPublicModel
 from models.users import UserModel
+from errors import AccountBlockedError, InvalidCredentialsError
+from services.auth import AUTH_COOKIE_NAME, AuthService
 from services.users import UserService
 from errors import UserNotFoundError
 
@@ -12,8 +15,8 @@ class CreateUserInDto(BaseModel):
     email: str
 
 
-class LoginUserInDto(BaseModel):
-    name: str
+class LoginAccountInDto(BaseModel):
+    login: str
     password: str
 
 
@@ -22,6 +25,7 @@ router = APIRouter()
 root_router = APIRouter()
 
 user_service = UserService()
+auth_service = AuthService()
 
 
 @router.get('/', status_code=status.HTTP_200_OK)
@@ -91,20 +95,32 @@ async def delete(user_id: str, request: Request) -> UserModel:
 
 @root_router.post('/login')
 async def login(
-    dto: LoginUserInDto,
+    dto: LoginAccountInDto,
     response: Response,
-) -> UserModel:
+) -> AccountPublicModel:
     try:
-        user = await user_service.login(dto.name, dto.password)
+        account = await auth_service.authenticate(dto.login, dto.password)
+        token = auth_service.create_access_token(account)
 
         response.set_cookie(
-            key="x-user-id",
-            value=user.id,
+            key=AUTH_COOKIE_NAME,
+            value=token,
+            httponly=True,
+            samesite="lax",
         )
 
-        return user
-    except UserNotFoundError:
+        return AccountPublicModel(
+            id=account.id,
+            login=account.login,
+            is_blocked=account.is_blocked,
+        )
+    except InvalidCredentialsError:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Логин или пароль не верны',
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid login or password',
+        )
+    except AccountBlockedError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Account is blocked',
         )
