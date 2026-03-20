@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from pathlib import Path
 from typing import Any
 import joblib
@@ -34,18 +35,18 @@ def save_model(model: LogisticRegression, path: Path | str = "model.pkl") -> Non
 def train_and_save_model(
     path: Path | str = "model.pkl",
     use_mlflow: bool = False,
-    mlflow_tracking_uri: str = "sqlite:///mlflow.db",
-    mlflow_experiment: str = "moderation-model",
-    mlflow_model_name: str = "moderation-model",
+    mlflow_tracking_uri: str | None = None,
+    mlflow_experiment: str | None = None,
+    mlflow_model_name: str | None = None,
 ) -> LogisticRegression:
     model = train_model()
     save_model(model, path)
     if use_mlflow:
         register_model_in_mlflow(
             model,
-            tracking_uri=mlflow_tracking_uri,
-            experiment=mlflow_experiment,
-            registered_model_name=mlflow_model_name,
+            tracking_uri=mlflow_tracking_uri or os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"),
+            experiment=mlflow_experiment or os.getenv("MLFLOW_EXPERIMENT", "moderation-model"),
+            registered_model_name=mlflow_model_name or os.getenv("MLFLOW_MODEL_NAME", "moderation-model"),
         )
     return model
 
@@ -57,6 +58,9 @@ def load_model(path: Path | str = "model.pkl") -> LogisticRegression:
 def load_model_from_mlflow(model_name: str, stage: str = "Production") -> Any:
     if mlflow is None:
         raise RuntimeError("MLflow is not available")
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+    if tracking_uri:
+        mlflow.set_tracking_uri(tracking_uri)
     model_uri = f"models:/{model_name}/{stage}"
     return mlflow.sklearn.load_model(model_uri)
 

@@ -6,6 +6,7 @@ services:
       DB_DSN: postgresql://postgres:postgres@postgres:5432/hw
       KAFKA_BOOTSTRAP_SERVERS: redpanda:29092
       REDIS_URL: redis://redis:6379/0
+      MLFLOW_TRACKING_URI: http://mlflow:5000
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: development
     ports:
@@ -14,6 +15,7 @@ services:
       - postgres
       - redpanda
       - redis
+      - mlflow
 
   postgres:
     image: postgres:16
@@ -81,5 +83,14 @@ services:
     depends_on:
       - prometheus
 
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.20.0
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow/artifacts
+    ports:
+      - "5001:5000"
+    volumes:
+      - mlflow_data:/mlflow
+
 volumes:
   pg_data:
+  mlflow_data:

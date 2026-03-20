@@ -13,6 +13,7 @@ docker compose up -d
 - Вэб-консоль для просмотра топиков и сообщений на `http://localhost:8080`
 - Prometheus на `http://localhost:9090`
 - Grafana на `http://localhost:3000` (`admin` / `admin`)
+- MLflow на `http://localhost:5001`
 
 Авторизация:
 - `POST /login` принимает `login` и `password`
@@ -30,6 +31,26 @@ python -m workers.moderation_worker
 
 ```
 docker compose run --rm app python -m workers.moderation_worker
+```
+
+3. Запуск тестов:
+
+Только integration-тесты:
+
+```
+pytest -m integration
+```
+
+Только unit-тесты:
+
+```
+pytest -m "not integration"
+```
+
+Все тесты:
+
+```
+pytest -q
 ```
 
 Что делает воркер:
